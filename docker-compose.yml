@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: mini-auth-redis
+    restart: unless-stopped
+    networks:
+      - traefik
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--save", "60", "1"]
+
+  auth:
+    build: .
+    container_name: mini-auth
+    restart: unless-stopped
+    depends_on:
+      - redis
+    networks:
+      - traefik
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DB_URL: sqlite+aiosqlite:///auth.db
+      LOG_DIR: /app/logs
+      AUTH_PUBLIC_URL: https://auth.allen2fuc.site
+      COOKIE_DOMAIN: .allen2fuc.myds.me
+      COOKIE_SECURE: "true"
+    volumes:
+      - ./auth.db:/app/auth.db
+      - ./logs:/app/logs
+      - ./static:/app/static
+      - ./templates:/app/templates
+   
+volumes:
+  redis-data:
+
+networks:
+  traefik:
+    external: true
