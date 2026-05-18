@@ -1,39 +1,66 @@
 version: "3.8"
 
+# docker network create traefik
+# mkdir -p ./traefik/logs ./traefik/dynamic ./traefik/config
+# mkdir -p ./mini-auth/logs ./mini-auth/data ./redis/data
+
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: mini-auth-redis
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - "81:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik/config/traefik.yml:/etc/traefik/traefik.yml
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/logs:/var/log/traefik
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 3
     networks:
       - traefik
-    volumes:
-      - redis-data:/data
-    command: ["redis-server", "--save", "60", "1"]
 
-  auth:
-    build: .
-    container_name: mini-auth
+  miniauth:
+    image: uhub.service.ucloud.cn/allen2fuc/mini-auth:latest
+    container_name: miniauth
     restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./mini-auth/logs:/app/logs
+      - ./mini-auth/data:/app/data
+    environment:
+      - AUTH_PUBLIC_URL=https://auth.allen2fuc.myds.me
+      - COOKIE_DOMAIN=.allen2fuc.myds.me
+      - COOKIE_SECURE=true
+      - DB_URL=sqlite+aiosqlite:///./data/auth.db
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
     networks:
       - traefik
-    environment:
-      REDIS_URL: redis://redis:6379/0
-      DB_URL: sqlite+aiosqlite:///auth.db
-      LOG_DIR: /app/logs
-      AUTH_PUBLIC_URL: https://auth.allen2fuc.site
-      COOKIE_DOMAIN: .allen2fuc.myds.me
-      COOKIE_SECURE: "true"
+
+  redis:
+    image: redis:8
+    container_name: redis
     volumes:
-      - ./auth.db:/app/auth.db
-      - ./logs:/app/logs
-      - ./static:/app/static
-      - ./templates:/app/templates
-   
-volumes:
-  redis-data:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./redis/data:/data
+    command: ["redis-server", "--save", "60", "1"]
+    networks:
+      - traefik
 
 networks:
   traefik:

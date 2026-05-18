@@ -1,5 +1,6 @@
 """FastAPI 入口"""
 
+from sys import prefix
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +13,7 @@ from app.modules.admin.api import router as admin_router
 from app.modules.auth.api import router as auth_router
 
 setup_logging()
-app = FastAPI(title="Mini Auth", lifespan=lifespan)
+app = FastAPI(title="Mini Auth", description="Mini Auth", lifespan=lifespan)
 
 # 静态资源
 app.mount("/static", StaticFiles(directory="static"), name="static")
