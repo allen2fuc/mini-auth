@@ -1,0 +1,9 @@
+http:
+  routers:
+    dashboard:
+      rule: Host(`traefik.example.com`)
+      entrypoints:
+        - web
+      service: api@internal
+      middlewares:
+        - mini-auth@file

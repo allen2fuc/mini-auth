@@ -14,8 +14,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
     ports:
-      - "81:80"
-      - "8080:8080"
+      - "80:80"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./traefik/config/traefik.yml:/etc/traefik/traefik.yml
@@ -29,27 +28,39 @@ services:
         max-size: 10m
         max-file: 3
     networks:
-      - traefik
+      - proxy
+
+  whoami:
+    image: traefik/whoami
+    container_name: whoami
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      - proxy
 
   miniauth:
-    image: uhub.service.ucloud.cn/allen2fuc/mini-auth:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: miniauth
     restart: unless-stopped
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
-      - ./mini-auth/logs:/app/logs
-      - ./mini-auth/data:/app/data
+      - ./logs:/app/logs
+      - ./auth.db:/app/data/auth.db
     environment:
-      - AUTH_PUBLIC_URL=https://auth.allen2fuc.myds.me
-      - COOKIE_DOMAIN=.allen2fuc.myds.me
-      - COOKIE_SECURE=true
+      - AUTH_PUBLIC_URL=http://auth.example.com
+      - COOKIE_DOMAIN=example.com
+      # Traefik 当前仅暴露 :80 (HTTP)；Secure Cookie 在 HTTP 下不会被浏览器保存
+      - COOKIE_SECURE=false
       - DB_URL=sqlite+aiosqlite:///./data/auth.db
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
     networks:
-      - traefik
+      - proxy
 
   redis:
     image: redis:8
@@ -60,8 +71,8 @@ services:
       - ./redis/data:/data
     command: ["redis-server", "--save", "60", "1"]
     networks:
-      - traefik
+      - proxy
 
 networks:
-  traefik:
+  proxy:
     external: true

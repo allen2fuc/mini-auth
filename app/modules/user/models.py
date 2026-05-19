@@ -18,5 +18,5 @@ class User(SQLModel, table=True):
     password_hash: str = Field(sa_column=Column(String(128), nullable=False, comment="密码哈希"))
     is_admin: bool = Field(sa_column=Column(Boolean, default=False, nullable=False, comment="是否为管理员"))
     is_active: bool = Field(sa_column=Column(Boolean, default=True, nullable=False, comment="是否启用"))
-    created_at: datetime = Field(sa_column=Column(DateTime, server_default=Text("CURRENT_TIMESTAMP"), nullable=False, comment="创建时间"))
-    updated_at: datetime = Field(sa_column=Column(DateTime, server_default=Text("CURRENT_TIMESTAMP"), nullable=False, onupdate=Text("CURRENT_TIMESTAMP"), comment="更新时间"))
+    created_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now, nullable=False, comment="创建时间"))
+    updated_at: datetime = Field(sa_column=Column(DateTime, default=datetime.now, nullable=False, onupdate=datetime.now, comment="更新时间"))

@@ -3,19 +3,10 @@ http:
     miniauth:
       rule: Host(`auth.example.com`)
       entryPoints:
-        - websecure
+        - web
       service: miniauth-svc
   services:
     miniauth-svc:
       loadBalancer:
         servers:
           - url: http://miniauth:4181
-middlewares:
-    miniauth-fa:
-      forwardAuth:
-        address: "http://miniauth:4181/verify"
-        trustForwardHeader: true
-        authResponseHeaders:
-          - "X-Forwarded-User"
-          - "X-Forwarded-Email"
-          - "X-Forwarded-Groups"

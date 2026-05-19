@@ -1,0 +1,16 @@
+
+
+http:
+  routers:
+    whoami:
+      rule: Host(`whoami.example.com`)
+      entryPoints:
+        - web
+      service: whoami-svc
+      middlewares:
+        - mini-auth
+  services:
+    whoami-svc:
+      loadBalancer:
+        servers:
+          - url: http://whoami:80

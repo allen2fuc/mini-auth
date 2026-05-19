@@ -9,6 +9,7 @@ accessLog:
 
 api:
   insecure: true
+  dashboard: true
 
 entryPoints:
   web:

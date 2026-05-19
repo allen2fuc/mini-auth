@@ -70,6 +70,7 @@ async def verify(
         login_url = (
             f"{settings.AUTH_PUBLIC_URL}/login?{urlencode({'rd': original})}"
         )
+        logger.info("LOGIN_REDIRECT original=%s login_url=%s", original, login_url)
         return RedirectResponse(url=login_url, status_code=status.HTTP_302_FOUND)
 
     resp = Response(status_code=status.HTTP_200_OK)

@@ -1,0 +1,11 @@
+http:
+  middlewares:
+    mini-auth:
+      forwardAuth:
+        address: "http://miniauth:4181/verify"
+        maxResponseBodySize: 8192
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "X-Forwarded-User"
+          - "X-Forwarded-Email"
+          - "X-Forwarded-Groups"
