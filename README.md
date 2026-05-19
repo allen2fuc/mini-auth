@@ -115,7 +115,6 @@ docker compose up -d --build
 
 - `AUTH_PUBLIC_URL`：登录页对外可访问的完整 URL（`verify` 重定向拼接用）
 - `COOKIE_DOMAIN` / `COOKIE_SECURE`：与公网域名、HTTPS 匹配
-- `INIT_ADMIN_PASS`：首次部署时的管理员密码（若未用 CLI 创建用户）
 
 ## 环境变量
 

@@ -3,6 +3,7 @@ import asyncio
 
 import typer
 
+from app.core import sessions
 from app.core.db import AsyncSessionLocal
 from app.modules.user import curd as user_crud
 from app.modules.user.schemas import UserCreate
@@ -63,6 +64,45 @@ def create_user(
             raise typer.Exit(code=1)
 
     asyncio.run(_create_user(username, password, email, admin))
+
+
+async def _delete_user(username: str) -> None:
+    async with AsyncSessionLocal() as session:
+        user = await user_crud.get_by_username(session, username)
+        if not user:
+            typer.secho(f"用户不存在: {username}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
+
+        if user.is_admin:
+            others = await user_crud.count_active_admins(session, exclude_id=user.id)
+            if others == 0:
+                typer.secho(
+                    "不能删除最后一个启用的管理员",
+                    fg=typer.colors.RED,
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+
+        user_id = user.id
+        deleted_username = user.username
+        await user_crud.delete(session, user)
+
+    await sessions.delete_user_sessions(user_id)
+    typer.secho(
+        f"已删除用户 id={user_id} username={deleted_username}",
+        fg=typer.colors.GREEN,
+    )
+
+
+@app.command("delete-user")
+def delete_user(
+    username: str = typer.Argument(..., help="用户名"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认"),
+) -> None:
+    """删除用户"""
+    if not yes:
+        typer.confirm(f"确定删除用户 {username}?", abort=True)
+    asyncio.run(_delete_user(username))
 
 
 if __name__ == "__main__":
