@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    ENABLE_DOCS: bool = False # 是否启用文档路由
+
     # 经过 Traefik 暴露的公网登录页地址 (verify 重定向时拼接)
     AUTH_PUBLIC_URL: str = "http://auth.localhost"  # 公网登录页地址
 
