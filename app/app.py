@@ -15,10 +15,10 @@ from app.modules.auth.api import router as auth_router
 docs = {}
 if not settings.ENABLE_DOCS:
     docs = {
-    "docs_url": None,
-    "redoc_url": None,
-    "openapi_url": None,
-}
+        "docs_url": None,
+        "redoc_url": None,
+        "openapi_url": None,
+    }
 
 setup_logging()
 app = FastAPI(title="Mini Auth", description="Mini Auth", lifespan=lifespan, **docs)
