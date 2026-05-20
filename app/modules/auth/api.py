@@ -5,15 +5,16 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Cookie, Depends, Form, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core import captcha, login_guard, sessions
 from app.core.config import settings
 from app.core.db import get_session
-from app.core.deps import client_ip
+from app.core.deps import client_ip, require_user
+from app.core.security import verify_password
 from app.core.templates import templates
 from app.modules.user import curd as user_crud
-from app.modules.user.schemas import UserRead
+from app.modules.user.schemas import UserUpdate
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -22,6 +23,17 @@ _ERROR_MESSAGES = {
     "invalid": "用户名或密码错误",
     "captcha": "验证码错误或已过期",
     "rate_limited": "登录尝试过于频繁,请稍后再试",
+}
+
+_CHANGE_PASSWORD_ERRORS = {
+    "invalid_old": "当前密码错误",
+    "mismatch": "两次输入的新密码不一致",
+    "weak": "新密码至少 4 位",
+    "same": "新密码不能与当前密码相同",
+}
+
+_SUCCESS_MESSAGES = {
+    "password_changed": "密码已修改，请使用新密码登录",
 }
 
 
@@ -33,10 +45,22 @@ def _build_original_url(request: Request) -> str:
     return f"{proto}://{host}{uri}"
 
 
-def _login_redirect(rd: str, error: str | None = None) -> RedirectResponse:
+def _change_password_redirect(error: str | None = None) -> RedirectResponse:
+    params: dict[str, str] = {}
+    if error:
+        params["error"] = error
+    url = "/change-password"
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
+
+
+def _login_redirect(rd: str, error: str | None = None, success: str | None = None) -> RedirectResponse:
     params: dict[str, str] = {"rd": rd}
     if error:
         params["error"] = error
+    if success:
+        params["success"] = success
     return RedirectResponse(
         url=f"/login?{urlencode(params)}",
         status_code=status.HTTP_303_SEE_OTHER,
@@ -85,11 +109,13 @@ async def login_page(
     request: Request,
     rd: str = "/",
     error: str | None = None,
+    success: str | None = None,
 ):
     sid = request.cookies.get(settings.COOKIE_NAME)
     if sid and await sessions.get_session(sid):
         return RedirectResponse(url=rd, status_code=status.HTTP_302_FOUND)
     ctx = await _login_context(request, rd, error)
+    ctx["success"] = _SUCCESS_MESSAGES.get(success) if success else None
     return templates.TemplateResponse(request, "login.html", ctx)
 
 
@@ -164,6 +190,66 @@ async def login_submit(
         domain=settings.COOKIE_DOMAIN,
         max_age=max_age,
         path="/",
+    )
+    return resp
+
+
+@router.get("/change-password", response_class=HTMLResponse)
+async def change_password_page(
+    request: Request,
+    user: dict = Depends(require_user),
+    error: str | None = None,
+    rd: str = "/admin/",
+):
+    return templates.TemplateResponse(
+        request,
+        "change_password.html",
+        {
+            "username": user["username"],
+            "rd": rd,
+            "error": _CHANGE_PASSWORD_ERRORS.get(error) if error else None,
+            "is_admin": user.get("is_admin", False),
+        },
+    )
+
+
+@router.post("/change-password")
+async def change_password_submit(
+    request: Request,
+    user: dict = Depends(require_user),
+    old_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    rd: str = Form("/admin/"),
+    db: AsyncSession = Depends(get_session),
+):
+    if new_password != confirm_password:
+        return _change_password_redirect("mismatch")
+    if len(new_password) < 4:
+        return _change_password_redirect("weak")
+
+    db_user = await user_crud.get_by_id(db, user["id"])
+    if not db_user or not verify_password(old_password, db_user.password_hash):
+        logger.warning(
+            "CHANGE_PASSWORD_FAIL user=%s ip=%s reason=invalid_old",
+            user["username"], client_ip(request),
+        )
+        return _change_password_redirect("invalid_old")
+
+    if verify_password(new_password, db_user.password_hash):
+        return _change_password_redirect("same")
+
+    await user_crud.update(db, db_user, UserUpdate(password=new_password))
+    await sessions.delete_user_sessions(user["id"])
+    logger.info(
+        "CHANGE_PASSWORD_OK user=%s ip=%s rd=%s",
+        user["username"], client_ip(request), rd,
+    )
+
+    # 清除登录态，跳转登录页用新密码重新登录
+    resp = _login_redirect(rd, success="password_changed")
+    resp.delete_cookie(
+        settings.COOKIE_NAME, domain=settings.COOKIE_DOMAIN, path="/"
     )
     return resp
 

@@ -2,6 +2,19 @@ let users = [];
 let editingId = null;
 
 // ============ API ============
+function formatApiError(detail) {
+  if (!detail) return 'request_failed';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(e => {
+      const field = Array.isArray(e.loc) ? e.loc.filter(x => x !== 'body').join('.') : '';
+      const prefix = field ? `${field}: ` : '';
+      return prefix + (e.msg || 'validation_error');
+    }).join('; ');
+  }
+  return String(detail);
+}
+
 async function api(method, url, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body !== undefined) opts.body = JSON.stringify(body);
@@ -9,8 +22,9 @@ async function api(method, url, body) {
   if (r.status === 204) return null;
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
-    const err = new Error(data.detail || 'request_failed');
-    err.code = data.detail;
+    const message = formatApiError(data.detail);
+    const err = new Error(message);
+    err.code = typeof data.detail === 'string' ? data.detail : message;
     throw err;
   }
   return data;
@@ -207,8 +221,15 @@ async function submitForm() {
         if (password.length < 4) throw new Error('密码至少 4 位');
         body.password = password;
       }
-      await api('PATCH', '/admin/api/users/' + editingId, body);
-      toast('已保存');
+      const data = await api('PATCH', '/admin/api/users/' + editingId, body);
+      if (data.reauth_required) {
+        toast('密码已修改，请重新登录');
+        window.location.href = '/login?rd=' + encodeURIComponent('/admin/') + '&success=password_changed';
+        return;
+      }
+      toast(password && editingId !== window.CURRENT_USER_ID
+        ? '已保存，该用户需使用新密码重新登录'
+        : '已保存');
     }
     closeModal();
     await loadUsers();

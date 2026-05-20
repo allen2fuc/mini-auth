@@ -2,14 +2,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.config import settings
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from .config import settings
 
 engine = create_async_engine(
     settings.DB_URL,
     echo=False,
-    future=True,
     connect_args={"check_same_thread": False}
 )
 

@@ -1,5 +1,6 @@
 """FastAPI 公共依赖"""
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import Cookie, HTTPException, Request, status
 
@@ -12,6 +13,21 @@ async def current_user(
 ) -> Optional[dict]:
     """当前 session 对应的用户快照,无则 None"""
     return await sessions.get_session(session_id)
+
+
+async def require_user(request: Request) -> dict:
+    """要求已登录,否则跳转登录页"""
+    sid = request.cookies.get(settings.COOKIE_NAME)
+    user = await sessions.get_session(sid) if sid else None
+    if not user:
+        rd = str(request.url.path)
+        if request.url.query:
+            rd = f"{rd}?{request.url.query}"
+        raise HTTPException(
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": f"/login?rd={quote(rd, safe='')}"},
+        )
+    return user
 
 
 async def require_admin(request: Request) -> dict:

@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import func, select
 
 from app.core.security import hash_password, verify_password
@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 async def list_all(session: AsyncSession) -> list[User]:
-    result = await session.execute(select(User).order_by(User.id))
-    return list(result.scalars().all())
+    result = await session.exec(select(User).order_by(User.id))
+    return list(result.all())
 
 
 async def get_by_id(session: AsyncSession, user_id: int) -> Optional[User]:
@@ -23,8 +23,8 @@ async def get_by_id(session: AsyncSession, user_id: int) -> Optional[User]:
 
 
 async def get_by_username(session: AsyncSession, username: str) -> Optional[User]:
-    result = await session.execute(select(User).where(User.username == username))
-    return result.scalar_one_or_none()
+    result = await session.exec(select(User).where(User.username == username))
+    return result.one_or_none()
 
 
 async def authenticate(
@@ -95,8 +95,8 @@ async def count_active_admins(
     )
     if exclude_id is not None:
         stmt = stmt.where(User.id != exclude_id)
-    result = await session.execute(stmt)
-    return int(result.scalar_one())
+    result = await session.exec(stmt)
+    return int(result.one())
 
 
 async def ensure_initial_admin(

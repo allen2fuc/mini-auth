@@ -3,17 +3,21 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, Response
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core import sessions
 from app.core.db import get_session
 from app.core.deps import require_admin
 from app.core.templates import templates
 from app.modules.user import curd as user_crud
-from app.modules.user.schemas import UserCreate, UserRead, UserUpdate
+from app.modules.user.schemas import UserCreate, UserRead, UserUpdate, UserUpdateResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _to_user_read(user) -> UserRead:
+    return UserRead.model_validate(user)
 
 
 # ============ 页面 ============
@@ -31,8 +35,7 @@ async def api_list(
     db: AsyncSession = Depends(get_session),
 ):
     users = await user_crud.list_all(db)
-    # return {"users": [u.to_public() for u in users]}
-    return {"users": users}
+    return {"users": [_to_user_read(u) for u in users]}
 
 
 @router.post("/api/users", status_code=status.HTTP_201_CREATED, response_model=UserRead)
@@ -48,10 +51,10 @@ async def api_create(
         "ADMIN_CREATE_USER by=%s target=%s admin=%s",
         admin["username"], user.username, user.is_admin,
     )
-    return user
+    return _to_user_read(user)
 
 
-@router.patch("/api/users/{user_id}", response_model=UserRead)
+@router.patch("/api/users/{user_id}", response_model=UserUpdateResponse)
 async def api_update(
     user_id: int,
     payload: UserUpdate,
@@ -74,22 +77,31 @@ async def api_update(
 
     updated = await user_crud.update(db, target, payload)
 
-    # 改了 admin/active/password 时撤销已有 session,立即生效
-    if (
-        payload.is_admin is not None
-        or payload.is_active is not None
-        or payload.password
-    ):
-        await sessions.delete_user_sessions(user_id)
+    # 仅修改密码时撤销目标用户 session；改自己密码时操作者需重新登录
+    password_changed = payload.password is not None
+    reauth_required = False
+    if password_changed:
+        try:
+            await sessions.delete_user_sessions(user_id)
+        except Exception:
+            logger.exception(
+                "failed to invalidate sessions for user_id=%s", user_id
+            )
+        if admin["id"] == user_id:
+            reauth_required = True
 
     changed_fields = [
-        k for k, v in payload.model_dump().items() if v is not None
+        k for k, v in payload.model_dump(exclude_none=True).items()
     ]
     logger.info(
-        "ADMIN_UPDATE_USER by=%s target=%s fields=%s",
+        "ADMIN_UPDATE_USER by=%s target=%s fields=%s password_changed=%s reauth=%s",
         admin["username"], updated.username, changed_fields,
+        password_changed, reauth_required,
     )
-    return updated
+    return UserUpdateResponse(
+        user=_to_user_read(updated),
+        reauth_required=reauth_required,
+    )
 
 
 @router.delete("/api/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
